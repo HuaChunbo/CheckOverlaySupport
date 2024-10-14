@@ -140,7 +140,7 @@ void TestSwapChainSetColorSpace1(IDXGIAdapter* adapter, ID3D11Device* device, DX
     }
     hr = create_surface_handle_function(COMPOSITIONOBJECT_ALL_ACCESS, nullptr, &handle);
 
-    // Different flags for RBG format
+    // Different flags required for RBG format
     if (format != DXGI_FORMAT_NV12 && format != DXGI_FORMAT_YUY2 && format != DXGI_FORMAT_P010)
     {
         desc.Flags = DXGI_SWAP_CHAIN_FLAG_FULLSCREEN_VIDEO | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING |
@@ -232,22 +232,19 @@ int main()
         return -1;
     }
 
+    // 1. IDXGIOutput3::CheckOverlaySupport cap test
     // Check overlay support for P010 format - 104
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_P010);
-
     // Check overlay support for R10G10B10A2_UNORM format - 24
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_R10G10B10A2_UNORM);
-
     // Check overlay support for B8G8R8A8_UNORM format - 87
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_B8G8R8A8_UNORM);
-
     // Check overlay support for NV12 format - 103
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_NV12);
-
     // Check overlay support for YUY2 format - 107
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_YUY2);
 
-
+    // 2. IDXGISwapChain3::SetColorSpace1 cap test
     // 8-bit SDR: BGRA8 + BI.709
     TestSwapChainSetColorSpace1(adapter, device, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P709);
     // 8-bit SDR: NV12 + BT.709
