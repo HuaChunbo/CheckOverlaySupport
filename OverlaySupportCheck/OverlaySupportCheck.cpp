@@ -74,11 +74,13 @@ void CheckOverlaySupport(IDXGIAdapter* adapter, ID3D11Device* device, DXGI_FORMA
         {
             std::cout << "Parsing CheckOverlaySupport::Overlay support is available (Direct).\n";
         }
-        else if (flags & DXGI_OVERLAY_SUPPORT_FLAG_SCALING)
+
+        if (flags & DXGI_OVERLAY_SUPPORT_FLAG_SCALING)
         {
             std::cout << "Parsing CheckOverlaySupport::Overlay support is available (Scaling).\n";
         }
-        else
+
+        if (!flags)
         {
             std::cout << "Parsing CheckOverlaySupport::Overlay support is not available.\n";
         }
@@ -118,6 +120,13 @@ void TestSwapChainSetColorSpace1(IDXGIAdapter* adapter, ID3D11Device* device, DX
         DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
     desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 
+    // Different flags required for RBG format
+    if (format != DXGI_FORMAT_NV12 && format != DXGI_FORMAT_YUY2 && format != DXGI_FORMAT_P010)
+    {
+        desc.Flags = DXGI_SWAP_CHAIN_FLAG_FULLSCREEN_VIDEO | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING |
+            DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+    }
+
     // Create surface handle for IDXGISwapChain1
     HANDLE handle = INVALID_HANDLE_VALUE;
     using PFN_DCOMPOSITION_CREATE_SURFACE_HANDLE =
@@ -139,13 +148,6 @@ void TestSwapChainSetColorSpace1(IDXGIAdapter* adapter, ID3D11Device* device, DX
         }
     }
     hr = create_surface_handle_function(COMPOSITIONOBJECT_ALL_ACCESS, nullptr, &handle);
-
-    // Different flags required for RBG format
-    if (format != DXGI_FORMAT_NV12 && format != DXGI_FORMAT_YUY2 && format != DXGI_FORMAT_P010)
-    {
-        desc.Flags = DXGI_SWAP_CHAIN_FLAG_FULLSCREEN_VIDEO | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING |
-            DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
-    }
 
     // Create IDXGISwapChain1 instance
     IDXGISwapChain1* swapchain1 = nullptr;
@@ -175,6 +177,31 @@ void TestSwapChainSetColorSpace1(IDXGIAdapter* adapter, ID3D11Device* device, DX
         else
         {
             std::cout << "Successfully SetColorSpace1 with color space: " << DxgiColorSpaceToString(colorSpace) << std::endl;
+        }
+
+        UINT flags = 0;
+        hr = swapchain3->CheckColorSpaceSupport(colorSpace, &flags);
+        if (FAILED(hr))
+        {
+            std::cout << "Failed to check color space support for " << DxgiColorSpaceToString(colorSpace) << std::endl;
+        }
+        else
+        {
+            std::cout << "IDXGISwapChain3::CheckColorSpaceSupport returns " << flags << std::endl;
+            if (flags & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)
+            {
+                std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport::PRESENT support is available (Non-Overlay).\n";
+            }
+
+            if (flags & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_OVERLAY_PRESENT)
+            {
+                std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport::OVERLAY_PRESENT support is available (Overlay).\n";
+            }
+
+            if (!flags)
+            {
+                std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport support is not available. \n";
+            }
         }
     }
 
