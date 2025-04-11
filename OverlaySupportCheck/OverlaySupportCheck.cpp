@@ -59,7 +59,7 @@ void CheckOverlaySupport(IDXGIAdapter* adapter, ID3D11Device* device, DXGI_FORMA
         return;
     }
 
-    std::cout << "Start IDXGIOutput3::CheckOverlaySupport for " << DxgiFormatToString(format) << "-----------------" << std::endl;
+    std::cout << "-----------------Start IDXGIOutput3::CheckOverlaySupport for " << DxgiFormatToString(format) << "-----------------" << std::endl;
 
     UINT flags = 0;
     hr = output3->CheckOverlaySupport(format, device, &flags);
@@ -77,7 +77,7 @@ void CheckOverlaySupport(IDXGIAdapter* adapter, ID3D11Device* device, DXGI_FORMA
 
         if (flags & DXGI_OVERLAY_SUPPORT_FLAG_SCALING)
         {
-            std::cout << "Parsing CheckOverlaySupport::Overlay support is available (Scaling).\n";
+            std::cout << "Parsing CheckOverlaySupport::Overlay support is available (Scaling + Direct).\n";
         }
 
         if (!flags)
@@ -86,7 +86,7 @@ void CheckOverlaySupport(IDXGIAdapter* adapter, ID3D11Device* device, DXGI_FORMA
         }
     }
 
-    std::cout << "End IDXGIOutput3::CheckOverlaySupport for " << DxgiFormatToString(format) << "-----------------" << std::endl;
+    std::cout << "-----------------End IDXGIOutput3::CheckOverlaySupport for " << DxgiFormatToString(format) << "-----------------" << std::endl;
 
     output3->Release();
     output->Release();
@@ -137,6 +137,7 @@ void TestSwapChainSetColorSpace1(IDXGIAdapter* adapter, ID3D11Device* device, DX
         HMODULE dcomp = ::LoadLibraryEx(L"dcomp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (!dcomp) {
             std::cout << "Failed to get handle for dcomp.dll" << std::endl;
+            mediaFactory->Release();
             return;
         }
         create_surface_handle_function =
@@ -144,71 +145,118 @@ void TestSwapChainSetColorSpace1(IDXGIAdapter* adapter, ID3D11Device* device, DX
                 ::GetProcAddress(dcomp, "DCompositionCreateSurfaceHandle"));
         if (!create_surface_handle_function) {
             std::cout << "Failed to get address for DCompositionCreateSurfaceHandle" << std::endl;
+            mediaFactory->Release();
             return;
         }
     }
     hr = create_surface_handle_function(COMPOSITIONOBJECT_ALL_ACCESS, nullptr, &handle);
+    if (FAILED(hr))
+    {
+        std::cout << "Failed to create HANDLE with " << DxgiFormatToString(format) << " error 0x" << std::hex << hr << std::endl;
+        mediaFactory->Release();
+        return;
+    }
 
     // Create IDXGISwapChain1 instance
     IDXGISwapChain1* swapchain1 = nullptr;
     hr = mediaFactory->CreateSwapChainForCompositionSurfaceHandle(
         device, handle, &desc, nullptr, &swapchain1);
-    if (SUCCEEDED(hr))
-    {
-        std::cout << "Successfully created IDXGISwapChain1 with " << DxgiFormatToString(format) << std::endl;
-    }
-    else
+    if (FAILED(hr))
     {
         std::cout << "Failed to create IDXGISwapChain1 with " << DxgiFormatToString(format) << " error 0x" << std::hex << hr << std::endl;
+        ::CloseHandle(handle);
+        mediaFactory->Release();
         return;
     }
 
     // QI IDXGISwapChain3 for SetColorSpace1 API
     IDXGISwapChain3* swapchain3 = nullptr;
     hr = swapchain1->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3);
-    if (SUCCEEDED(hr))
+    if (FAILED(hr))
     {
-        // ?? Fail with E_INVALIDARG (0x80070057) if the swap chain does not support the
-        // DXGI color space or something goes wrong internally.
-        hr = swapchain3->SetColorSpace1(colorSpace);
-        if (FAILED(hr)) {
-            std::cout << "Failed to SetColorSpace1 with color space: " << DxgiColorSpaceToString(colorSpace) << " error: 0x" << std::hex << hr << std::endl;
-        }
-        else
+        std::cout << "QueryInterface of IDXGISwapChain3 is not supported.\n";
+        swapchain1->Release();
+        ::CloseHandle(handle);
+        mediaFactory->Release();
+        return;
+    }
+
+    std::cout << "-----------------Start IDXGISwapChain3::SetColorSpace1 for " << DxgiFormatToString(format) << "-----------------" << std::endl;
+    // ?? Fail with E_INVALIDARG (0x80070057) if the swap chain does not support the
+    // DXGI color space or something goes wrong internally.
+    hr = swapchain3->SetColorSpace1(colorSpace);
+    if (FAILED(hr)) {
+        std::cout << "Failed to SetColorSpace1 with color space: " << DxgiColorSpaceToString(colorSpace) << " error: 0x" << std::hex << hr << std::endl;
+    }
+    else
+    {
+        std::cout << "Successfully SetColorSpace1 with color space: " << DxgiColorSpaceToString(colorSpace) << std::endl;
+    }
+
+    UINT flags = 0;
+    hr = swapchain3->CheckColorSpaceSupport(colorSpace, &flags);
+    if (FAILED(hr))
+    {
+        std::cout << "Failed to check color space support for " << DxgiColorSpaceToString(colorSpace) << std::endl;
+    }
+    else
+    {
+        std::cout << "IDXGISwapChain3::CheckColorSpaceSupport returns " << flags << std::endl;
+        if (flags & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)
         {
-            std::cout << "Successfully SetColorSpace1 with color space: " << DxgiColorSpaceToString(colorSpace) << std::endl;
+            std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport::PRESENT support is available (Non-Overlay).\n";
         }
 
-        UINT flags = 0;
-        hr = swapchain3->CheckColorSpaceSupport(colorSpace, &flags);
-        if (FAILED(hr))
+        if (flags & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_OVERLAY_PRESENT)
         {
-            std::cout << "Failed to check color space support for " << DxgiColorSpaceToString(colorSpace) << std::endl;
+            std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport::OVERLAY_PRESENT support is available (Overlay).\n";
         }
-        else
+
+        if (!flags)
         {
-            std::cout << "IDXGISwapChain3::CheckColorSpaceSupport returns " << flags << std::endl;
-            if (flags & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)
-            {
-                std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport::PRESENT support is available (Non-Overlay).\n";
-            }
-
-            if (flags & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_OVERLAY_PRESENT)
-            {
-                std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport::OVERLAY_PRESENT support is available (Overlay).\n";
-            }
-
-            if (!flags)
-            {
-                std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport support is not available. \n";
-            }
+            std::cout << "Parsing IDXGISwapChain3::CheckColorSpaceSupport support is not available. \n";
         }
     }
+    std::cout << "-----------------End IDXGISwapChain3::SetColorSpace1 for " << DxgiFormatToString(format) << "-----------------" << std::endl;
 
     swapchain3->Release();
     swapchain1->Release();
     ::CloseHandle(handle);
     mediaFactory->Release();
+}
+
+void CheckDisplayableSupport(IDXGIAdapter* adapter, ID3D11Device* device, DXGI_FORMAT format) {
+    if (!device)
+    {
+        std::cout << "Failed to retrieve D3D11 device." << std::endl;
+        return;
+    }
+
+    std::cout << "-----------------Start D3D11 Displayble Surface check for " << DxgiFormatToString(format) << "-----------------" << std::endl;
+
+    // According to the document:
+    // https://learn.microsoft.com/en-us/windows/win32/direct3d11/displayable-surfaces#formats
+    // DXGI_FORMAT_P010 display feature is optional and provided by platform driver.
+    D3D11_FEATURE_DATA_FORMAT_SUPPORT2 supported_format;
+    supported_format.InFormat = format;
+
+    if (!SUCCEEDED(device->CheckFeatureSupport(
+        D3D11_FEATURE_FORMAT_SUPPORT2, &supported_format, sizeof(supported_format))))
+    {
+        std::cout << "Failed to check D3D11_FEATURE_FORMAT_SUPPORT2 feature." << std::endl;
+        return;
+    }
+
+    if (supported_format.OutFormatSupport2 & D3D11_FORMAT_SUPPORT2_DISPLAYABLE)
+    {
+        std::cout << "Displayable surface of " << DxgiFormatToString(format) << " is supported." << std::endl;
+    }
+    else
+    {
+        std::cout << "Displayable surface of " << DxgiFormatToString(format) << " is NOT supported." << std::endl;
+    }
+
+    std::cout << "-----------------End D3D11 Displayble Surface check for " << DxgiFormatToString(format) << "-----------------" << std::endl;
 }
 
 int main()
@@ -262,6 +310,8 @@ int main()
     // 1. IDXGIOutput3::CheckOverlaySupport cap test
     // Check overlay support for P010 format - 104
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_P010);
+
+    /* You can uncomment this section for more tests of overlay support.
     // Check overlay support for R10G10B10A2_UNORM format - 24
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_R10G10B10A2_UNORM);
     // Check overlay support for B8G8R8A8_UNORM format - 87
@@ -270,14 +320,20 @@ int main()
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_NV12);
     // Check overlay support for YUY2 format - 107
     CheckOverlaySupport(adapter, device, DXGI_FORMAT_YUY2);
+    */
 
-    // 2. IDXGISwapChain3::SetColorSpace1 cap test
+    // 2. Check displayable surface with P010 format - 104
+    CheckDisplayableSupport(adapter, device, DXGI_FORMAT_P010);
+
+    /* You can uncomment the following code to test the SetColorSpace1 API.
+    // 3. IDXGISwapChain3::SetColorSpace1 cap test
     // 8-bit SDR: BGRA8 + BI.709
     TestSwapChainSetColorSpace1(adapter, device, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P709);
     // 8-bit SDR: NV12 + BT.709
     TestSwapChainSetColorSpace1(adapter, device, DXGI_FORMAT_NV12, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709);
     // 10-bit HDR: RGB10A2 + BT.2020
     TestSwapChainSetColorSpace1(adapter, device, DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+    */
 
     // Cleanup
     context->Release();
